@@ -1,35 +1,51 @@
+ï»¿// 5ë²ˆì§¸ ë ˆì½”ë“œ age ì •í™• ì¶”ì¶œ (BOM ì œê±° + 27B ê³ ì •í­)
 #include <stdio.h>
-#include "AVL.h"
+#include <string.h>
 
-#define NODE_WIDTH 6   // ¼ıÀÚ ÀÚ¸®¼ö °íÁ¤
-
-// Æ®¸® ±¸Á¶¸¦ Àç±ÍÀûÀ¸·Î Ãâ·Â
-void print_tree(struct node* root, int depth, char prefix) {
-    if (!root) return;
-
-    // ¿À¸¥ÂÊ ¸ÕÀú Ãâ·Â
-    print_tree(root->right, depth + 1, '/');
-
-    // ÇöÀç ³ëµå Ãâ·Â
-    for (int i = 0; i < depth; i++)
-        printf("      "); // µé¿©¾²±â
-    if (depth > 0)
-        printf("%c-----", prefix); // °¡Áö Ç¥½Ã
-    printf("%*u\n", NODE_WIDTH, root->key);
-
-    // ¿ŞÂÊ Ãâ·Â
-    print_tree(root->left, depth + 1, '\\');
+static void skip_utf8_bom(FILE* fp) {
+    int b1 = fgetc(fp);
+    int b2 = fgetc(fp);
+    int b3 = fgetc(fp);
+    if (!(b1 == 0xEF && b2 == 0xBB && b3 == 0xBF)) {
+        if (b3 != EOF) ungetc(b3, fp);
+        if (b2 != EOF) ungetc(b2, fp);
+        if (b1 != EOF) ungetc(b1, fp);
+    }
 }
 
-int main() {
-    struct node* root = avl_create_tree("fixed_length_records.txt");
-    if (!root) {
-        printf("Æ®¸® »ı¼º ½ÇÆĞ!\n");
-        return 1;
+static int read_fixed_record(FILE* fp, char rec[27]) {
+    size_t n = fread(rec, 1, 27, fp);
+    if (n < 27) return 0;
+    // ê°œí–‰ ì†Œë¹„: \r\n, \n, \r í—ˆìš©
+    int c = fgetc(fp);
+    if (c == '\r') {
+        int c2 = fgetc(fp);
+        if (c2 != '\n' && c2 != EOF) ungetc(c2, fp);
     }
+    else if (c != '\n' && c != EOF) {
+        ungetc(c, fp);
+    }
+    return 1;
+}
 
-    printf("\n=== Æ®¸® ±¸Á¶ ±×¸² ===\n");
-    print_tree(root, 0, ' '); // ·çÆ®¿¡´Â °¡Áö ¾øÀ½
+int main(void) {
+    const char* path = "fixed_length_records";
+    FILE* fp = fopen(path, "rb");
+    if (!fp) { perror("open"); return 1; }
 
+    skip_utf8_bom(fp);            // â˜… BOMì´ ìˆìœ¼ë©´ ê±´ë„ˆëœ€
+
+    char rec[27];
+    int idx = 0;
+    while (read_fixed_record(fp, rec)) {
+        ++idx;
+        if (idx == 10) {
+            char age[4];
+            memcpy(age, rec + 24, 3); age[3] = '\0';
+            printf("5ë²ˆì§¸ ë ˆì½”ë“œ age = %s\n", age);
+            break;
+        }
+    }
+    fclose(fp);
     return 0;
 }
